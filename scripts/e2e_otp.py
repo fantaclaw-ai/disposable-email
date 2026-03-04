@@ -10,6 +10,14 @@ from urllib import request
 
 API = "https://api.mail.tm"
 
+WORDS = [
+    "amber", "apple", "aqua", "bamboo", "berry", "blue", "brisk", "cedar", "cherry", "cloud",
+    "coral", "cosmic", "dawn", "delta", "ember", "forest", "frost", "gold", "harbor", "hazel",
+    "indigo", "ivory", "jade", "jolly", "lemon", "lotus", "lunar", "maple", "mist", "moss",
+    "nova", "ocean", "olive", "opal", "pearl", "pine", "plum", "polar", "raven", "river",
+    "rose", "ruby", "sable", "sage", "sky", "solar", "stone", "sunny", "violet", "willow",
+]
+
 
 def http_json(url, method="GET", data=None, headers=None):
     req = request.Request(url=url, method=method)
@@ -23,21 +31,30 @@ def http_json(url, method="GET", data=None, headers=None):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def create_inbox(prefix="tmp"):
+def random_local_part():
+    word1 = random.choice(WORDS)
+    word2 = random.choice(WORDS)
+    digits = "".join(random.choices(string.digits, k=4))
+    return f"{word1}.{word2}.{digits}"
+
+
+def create_inbox():
     domains = http_json(f"{API}/domains").get("hydra:member", [])
     if not domains:
         raise RuntimeError("No Mail.tm domains available")
 
     domain = domains[0]["domain"]
-    local = prefix + str(int(time.time())) + "".join(random.choices(string.ascii_lowercase, k=4))
-    address = f"{local}@{domain}"
+    local = random_local_part()
+    requested_address = f"{local}@{domain}"
     password = "Tmp!" + "".join(random.choices(string.ascii_letters + string.digits, k=12))
 
-    account = http_json(f"{API}/accounts", method="POST", data={"address": address, "password": password})
-    token_resp = http_json(f"{API}/token", method="POST", data={"address": address, "password": password})
+    account = http_json(f"{API}/accounts", method="POST", data={"address": requested_address, "password": password})
+    canonical_address = account.get("address") or requested_address
+    token_resp = http_json(f"{API}/token", method="POST", data={"address": canonical_address, "password": password})
 
     return {
-        "address": address,
+        "address": canonical_address,
+        "requestedAddress": requested_address,
         "password": password,
         "token": token_resp.get("token"),
         "accountId": account.get("id"),
@@ -66,7 +83,6 @@ def get_message(token, message_id):
 
 def main():
     p = argparse.ArgumentParser(description="Create Mail.tm inbox and wait for OTP")
-    p.add_argument("--prefix", default="tmp", help="Local-part prefix for mailbox")
     p.add_argument("--timeout", type=int, default=120, help="Max seconds to wait for OTP")
     p.add_argument("--interval", type=float, default=3, help="Polling interval seconds")
     p.add_argument("--otp-regex", default=r"\b(\d{4,8})\b", help="Regex with capture group for OTP")
@@ -81,7 +97,7 @@ def main():
             with open(args.save, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    inbox = create_inbox(prefix=args.prefix)
+    inbox = create_inbox()
     emit({"event": "inbox_created", **inbox}, flush=True)
 
     deadline = time.time() + args.timeout
