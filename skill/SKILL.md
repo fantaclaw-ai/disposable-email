@@ -3,7 +3,7 @@ name: disposable-email
 description: Create disposable Mail.tm inboxes and programmatically read incoming emails/OTP codes. Use when asked to generate a temporary email, poll inbox messages, extract OTPs, or automate email verification testing with Mail.tm.
 ---
 
-# temp-mailtm
+# Disposable Email (Mail.tm)
 
 Create and read temporary Mail.tm inboxes for testing email flows.
 
